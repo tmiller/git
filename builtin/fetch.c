@@ -732,7 +732,8 @@ static int fetch_refs(struct transport *transport, struct ref *ref_map)
 	return ret;
 }
 
-static int prune_refs(struct refspec *refs, int ref_count, struct ref *ref_map)
+static int prune_refs(struct refspec *refs, int ref_count, struct ref *ref_map,
+			const char *raw_url)
 {
 	int result = 0;
 	struct ref *ref, *stale_refs = get_stale_heads(refs, ref_count, ref_map);
@@ -744,6 +745,7 @@ static int prune_refs(struct refspec *refs, int ref_count, struct ref *ref_map)
 		if (!dry_run)
 			result |= delete_ref(ref->name, NULL, 0);
 		if (verbosity >= 0) {
+			print_url(raw_url);
 			fprintf(stderr, " x %-*s %-*s -> %s\n",
 				TRANSPORT_SUMMARY(_("[deleted]")),
 				REFCOL_WIDTH, _("(none)"), prettify_refname(ref->name));
@@ -878,11 +880,12 @@ static int do_fetch(struct transport *transport,
 		 * don't care whether --tags was specified.
 		 */
 		if (ref_count) {
-			prune_refs(refs, ref_count, ref_map);
+			prune_refs(refs, ref_count, ref_map, transport->url);
 		} else {
 			prune_refs(transport->remote->fetch,
 				   transport->remote->fetch_refspec_nr,
-				   ref_map);
+				   ref_map,
+				   transport->url);
 		}
 	}
 	free_refs(ref_map);
