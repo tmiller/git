@@ -551,6 +551,8 @@ static int store_updated_refs(const char *raw_url, const char *remote_name,
 	else
 		url = xstrdup("foreign");
 
+	url_len = strlen(url);
+
 	rm = ref_map;
 	if (check_everything_connected(iterate_ref_map, 0, &rm)) {
 		rc = error(_("%s did not send all necessary objects\n"), url);
@@ -605,13 +607,6 @@ static int store_updated_refs(const char *raw_url, const char *remote_name,
 				kind = "";
 				what = rm->name;
 			}
-
-			url_len = strlen(url);
-			for (i = url_len - 1; url[i] == '/' && 0 <= i; i--)
-				;
-			url_len = i + 1;
-			if (4 < i && !strncmp(".git", url + i - 3, 4))
-				url_len = i - 3;
 
 			strbuf_reset(&note);
 			if (*what) {
