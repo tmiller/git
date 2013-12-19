@@ -44,6 +44,7 @@ static struct transport *gtransport;
 static struct transport *gsecondary;
 static const char *submodule_prefix = "";
 static const char *recurse_submodules_default;
+static int shown_url = 0;
 
 static int option_parse_recurse_submodules(const struct option *opt,
 				   const char *arg, int unset)
@@ -535,7 +536,7 @@ static int store_updated_refs(const char *raw_url, const char *remote_name,
 {
 	FILE *fp;
 	struct commit *commit;
-	int url_len, i, shown_url = 0, rc = 0;
+	int url_len, i, rc = 0;
 	struct strbuf note = STRBUF_INIT;
 	const char *what, *kind;
 	struct ref *rm;
@@ -550,6 +551,8 @@ static int store_updated_refs(const char *raw_url, const char *remote_name,
 		url = transport_anonymize_url(raw_url);
 	else
 		url = xstrdup("foreign");
+
+	url_len = strlen(url);
 
 	rm = ref_map;
 	if (check_everything_connected(iterate_ref_map, 0, &rm)) {
@@ -605,13 +608,6 @@ static int store_updated_refs(const char *raw_url, const char *remote_name,
 				kind = "";
 				what = rm->name;
 			}
-
-			url_len = strlen(url);
-			for (i = url_len - 1; url[i] == '/' && 0 <= i; i--)
-				;
-			url_len = i + 1;
-			if (4 < i && !strncmp(".git", url + i - 3, 4))
-				url_len = i - 3;
 
 			strbuf_reset(&note);
 			if (*what) {
@@ -708,17 +704,28 @@ static int fetch_refs(struct transport *transport, struct ref *ref_map)
 	return ret;
 }
 
-static int prune_refs(struct refspec *refs, int ref_count, struct ref *ref_map)
+static int prune_refs(struct refspec *refs, int ref_count, struct ref *ref_map,
+		const char *raw_url)
 {
 	int result = 0;
 	struct ref *ref, *stale_refs = get_stale_heads(refs, ref_count, ref_map);
+	char *url;
 	const char *dangling_msg = dry_run
 		? _("   (%s will become dangling)")
 		: _("   (%s has become dangling)");
 
+	if (raw_url)
+		url = transport_anonymize_url(raw_url);
+	else
+		url = xstrdup("foreign");
+
 	for (ref = stale_refs; ref; ref = ref->next) {
 		if (!dry_run)
 			result |= delete_ref(ref->name, NULL, 0);
+		if (verbosity >= 0 && !shown_url) {
+			fprintf(stderr, _("From %s\n"), url);
+			shown_url = 1;
+		}
 		if (verbosity >= 0) {
 			fprintf(stderr, " x %-*s %-*s -> %s\n",
 				TRANSPORT_SUMMARY(_("[deleted]")),
@@ -726,6 +733,7 @@ static int prune_refs(struct refspec *refs, int ref_count, struct ref *ref_map)
 			warn_dangling_symref(stderr, dangling_msg, ref->name);
 		}
 	}
+	free(url);
 	free_refs(stale_refs);
 	return result;
 }
@@ -842,11 +850,6 @@ static int do_fetch(struct transport *transport,
 
 	if (tags == TAGS_DEFAULT && autotags)
 		transport_set_option(transport, TRANS_OPT_FOLLOWTAGS, "1");
-	if (fetch_refs(transport, ref_map)) {
-		free_refs(ref_map);
-		retcode = 1;
-		goto cleanup;
-	}
 	if (prune) {
 		/*
 		 * We only prune based on refspecs specified
@@ -854,12 +857,18 @@ static int do_fetch(struct transport *transport,
 		 * don't care whether --tags was specified.
 		 */
 		if (ref_count) {
-			prune_refs(refs, ref_count, ref_map);
+			prune_refs(refs, ref_count, ref_map, transport->url);
 		} else {
 			prune_refs(transport->remote->fetch,
 				   transport->remote->fetch_refspec_nr,
-				   ref_map);
+				   ref_map,
+				   transport->url);
 		}
+	}
+	if (fetch_refs(transport, ref_map)) {
+		free_refs(ref_map);
+		retcode = 1;
+		goto cleanup;
 	}
 	free_refs(ref_map);
 
