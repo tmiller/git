@@ -139,6 +139,7 @@
 /git-replace
 /git-request-pull
 /git-rerere
+/git-rerere--train
 /git-reset
 /git-restore
 /git-rev-list
