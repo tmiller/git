@@ -10,7 +10,13 @@
 #include "pathspec.h"
 
 static const char * const rerere_usage[] = {
-	N_("git rerere [clear | forget <path>... | status | remaining | diff | gc]"),
+	N_("git rerere [--rerere-autoupdate]"),
+	N_("git rerere clear"),
+	N_("git rerere forget <path>..."),
+	N_("git rerere status"),
+	N_("git rerere remaining"),
+	N_("git rerere diff"),
+	N_("git rerere gc"),
 	NULL,
 };
 
@@ -70,9 +76,11 @@ int cmd_rerere(int argc, const char **argv, const char *prefix)
 	if (autoupdate == 0)
 		flags = RERERE_NOAUTOUPDATE;
 
+	// Uses autoupdate
 	if (argc < 1)
 		return repo_rerere(the_repository, flags);
 
+	// Does not use autoupdate
 	if (!strcmp(argv[0], "forget")) {
 		struct pathspec pathspec;
 		if (argc < 2)
@@ -82,6 +90,7 @@ int cmd_rerere(int argc, const char **argv, const char *prefix)
 		return rerere_forget(the_repository, &pathspec);
 	}
 
+	// Does not use autoupdate
 	if (!strcmp(argv[0], "clear")) {
 		rerere_clear(the_repository, &merge_rr);
 	} else if (!strcmp(argv[0], "gc"))
@@ -92,6 +101,8 @@ int cmd_rerere(int argc, const char **argv, const char *prefix)
 			return 0;
 		for (i = 0; i < merge_rr.nr; i++)
 			printf("%s\n", merge_rr.items[i].string);
+
+	// Does not use autoupdate
 	} else if (!strcmp(argv[0], "remaining")) {
 		rerere_remaining(the_repository, &merge_rr);
 		for (i = 0; i < merge_rr.nr; i++) {
@@ -102,6 +113,7 @@ int cmd_rerere(int argc, const char **argv, const char *prefix)
 				 * string_list_clear() */
 				merge_rr.items[i].util = NULL;
 		}
+	// Does not use autoupdate
 	} else if (!strcmp(argv[0], "diff")) {
 		if (setup_rerere(the_repository, &merge_rr,
 				 flags | RERERE_READONLY) < 0)
@@ -112,6 +124,7 @@ int cmd_rerere(int argc, const char **argv, const char *prefix)
 			if (diff_two(rerere_path(id, "preimage"), path, path, path))
 				die(_("unable to generate diff for '%s'"), rerere_path(id, NULL));
 		}
+	// Does not use autoupdate
 	} else
 		usage_with_options(rerere_usage, options);
 
