@@ -8,10 +8,23 @@
 #include "xdiff/xdiff.h"
 #include "xdiff-interface.h"
 #include "pathspec.h"
+#include "run-command.h"
 
 static const char * const rerere_usage[] = {
-	N_("git rerere [clear | forget <path>... | status | remaining | diff | gc]"),
+	N_("git rerere [--rerere-autoupdate]"),
+	N_("git rerere clear"),
+	N_("git rerere forget <path>..."),
+	N_("git rerere status"),
+	N_("git rerere remaining"),
+	N_("git rerere diff"),
+	N_("git rerere gc"),
+	N_("git rerere train [-o | --overwrite] <commit>..."),
 	NULL,
+};
+
+static const char * const rerere_train_usage[] = {
+	N_("git rerere train [<options>] <commit>..."),
+	NULL
 };
 
 static int outf(void *dummy, mmbuffer_t *ptr, int nbuf)
@@ -53,7 +66,7 @@ static int diff_two(const char *file1, const char *label1,
 int cmd_rerere(int argc, const char **argv, const char *prefix)
 {
 	struct string_list merge_rr = STRING_LIST_INIT_DUP;
-	int i, autoupdate = -1, flags = 0;
+	int i, autoupdate = -1, flags = 0, overwrite = 0;
 
 	struct option options[] = {
 		OPT_SET_INT(0, "rerere-autoupdate", &autoupdate,
@@ -61,7 +74,8 @@ int cmd_rerere(int argc, const char **argv, const char *prefix)
 		OPT_END(),
 	};
 
-	argc = parse_options(argc, argv, prefix, options, rerere_usage, 0);
+	argc = parse_options(argc, argv, prefix, options, rerere_usage,
+			PARSE_OPT_STOP_AT_NON_OPTION);
 
 	git_config(git_xmerge_config, NULL);
 
@@ -92,6 +106,7 @@ int cmd_rerere(int argc, const char **argv, const char *prefix)
 			return 0;
 		for (i = 0; i < merge_rr.nr; i++)
 			printf("%s\n", merge_rr.items[i].string);
+
 	} else if (!strcmp(argv[0], "remaining")) {
 		rerere_remaining(the_repository, &merge_rr);
 		for (i = 0; i < merge_rr.nr; i++) {
@@ -112,6 +127,24 @@ int cmd_rerere(int argc, const char **argv, const char *prefix)
 			if (diff_two(rerere_path(id, "preimage"), path, path, path))
 				die(_("unable to generate diff for '%s'"), rerere_path(id, NULL));
 		}
+	} else if (!strcmp(argv[0], "train")) {
+
+		struct option options[] = {
+			OPT_BOOL('o',"overwrite", &overwrite,
+					N_("overwrite any existing rerere cache")),
+			OPT_END()
+		};
+		argc = parse_options(argc, argv, NULL, options,
+				rerere_train_usage, 0);
+		struct argv_array train_argv = ARGV_ARRAY_INIT;
+
+		argv_array_push(&train_argv, "git-rerere--train");
+		if (overwrite)
+			argv_array_push(&train_argv, "--overwrite");
+		argv_array_pushv(&train_argv, argv);
+
+		return run_command_v_opt(train_argv.argv, RUN_USING_SHELL);
+	// Does not use autoupdate
 	} else
 		usage_with_options(rerere_usage, options);
 
